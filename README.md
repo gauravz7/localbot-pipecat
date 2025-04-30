@@ -1,106 +1,122 @@
 # LocalBot Pipecat
 
-This project implements a real-time voice bot using the [Pipecat](https://github.com/pipecat-ai/pipecat-python) framework, connecting to Google's Gemini Multimodal Live LLM service via Vertex AI. It allows users to interact with the Gemini model through voice using a simple web-based client.
+## Overview
+
+This project implements a real-time, voice-controlled chatbot using the [Pipecat](https://github.com/pipecat-ai/pipecat-python) framework. It connects to Google's Gemini Multimodal Live LLM service via Vertex AI, allowing users to interact with the Gemini model through voice using a simple web-based client.
+
+## Features
+
+*   Real-time, bidirectional audio streaming.
+*   Integration with Google Vertex AI Gemini Live API.
+*   WebSocket communication between backend and frontend.
+*   Voice Activity Detection (VAD).
+*   Basic function calling support (e.g., ending the call).
+*   Configurable via environment variables.
 
 ## Architecture
 
 The application consists of a Python backend powered by Pipecat and a simple HTML/JavaScript frontend for interaction.
 
-**1. Backend (`bot.py`)**
+### Backend (`bot.py`)
 
-*   **Framework:** Built using the `pipecat-ai` framework for managing real-time media pipelines.
-*   **Transport:** Uses `WebsocketServerTransport` to establish a WebSocket connection with the client (`ws://localhost:8765` by default). It handles audio input/output and uses `SileroVADAnalyzer` for Voice Activity Detection.
-*   **LLM Integration:** Integrates the custom `GeminiMultimodalLiveLLMService` (defined in `gemini_multimodal_live_vertex/gemini.py`) to connect to the Google Vertex AI Gemini endpoint.
-    *   Configured for audio input/output (`modalities=GeminiMultimodalModalities.AUDIO`).
-    *   Uses a system prompt to instruct the LLM on its role and behavior (e.g., how to handle call termination).
-    *   Supports function calling/tools (e.g., an `end_call` tool is registered).
-*   **Context Management:** Uses `OpenAILLMContext` (adapted for Gemini) to maintain the conversation history.
-*   **Asynchronous Operations:** Leverages `asyncio` for handling concurrent operations like WebSocket communication and LLM interaction.
-*   **Dependencies:** Relies on libraries listed in `requirements.txt`, including `pipecat-ai`, `google-cloud-*`, `websockets`, `loguru`, etc.
+*   **Framework:** Utilizes the `pipecat-ai` framework for managing the real-time media pipeline.
+*   **Transport:** Employs `WebsocketServerTransport` to handle WebSocket connections from the client (default `ws://localhost:8765`), managing audio input/output streams and VAD using `SileroVADAnalyzer`.
+*   **LLM Integration:** Leverages the custom `GeminiMultimodalLiveLLMService` (from `gemini_multimodal_live_vertex/gemini.py`) to communicate with the Google Vertex AI Gemini endpoint. It's configured for audio modalities and uses a system prompt for LLM guidance.
+*   **Context Management:** Maintains conversation history using an adapted `OpenAILLMContext`.
+*   **Asynchronicity:** Built on `asyncio` for efficient handling of concurrent network and AI operations.
 
-**2. Gemini LLM Service (`gemini_multimodal_live_vertex/gemini.py`)**
+### LLM Service (`gemini_multimodal_live_vertex/gemini.py`)
 
-*   **Custom Pipecat Service:** Extends `pipecat.services.ai_services.LLMService`.
-*   **Vertex AI Connection:** Connects securely to the Vertex AI Gemini Multimodal Live endpoint (`wss://us-central1-aiplatform.googleapis.com/ws/...`) using WebSockets.
-*   **Authentication:** Uses Google Cloud Application Default Credentials (ADC) to authenticate requests.
-*   **Real-time Communication:** Handles bidirectional streaming of audio data and control messages (configuration, tool calls, etc.) with the Gemini API.
-*   **Context Adaptation:** Adapts the `OpenAILLMContext` structure for compatibility with the Gemini API's expected format.
-*   **Audio Processing:** Manages sending user audio and receiving model audio. Includes optional integration with a transcriber (`AudioTranscriber`).
+*   **Custom Pipecat Service:** Extends `LLMService` to specifically handle the Gemini Live API.
+*   **Vertex AI Connection:** Establishes a secure WebSocket connection to the Vertex AI Gemini Multimodal Live endpoint (`wss://[location]-aiplatform.googleapis.com/ws/...`).
+*   **Authentication:** Authenticates using Google Cloud Application Default Credentials (ADC).
+*   **Real-time Streaming:** Manages the bidirectional flow of audio data and control messages (configuration, tool calls) with the Gemini API.
 
-**3. Frontend (`index.html`)**
+### Frontend (`index.html`)
 
-*   **Interface:** A basic HTML page with JavaScript for testing the bot.
+*   **Interface:** Provides a minimal web interface for user interaction (start/stop audio).
 *   **WebSocket Client:** Connects to the backend WebSocket server (`ws://localhost:8765`).
-*   **Microphone Access:** Uses `navigator.mediaDevices.getUserMedia` to capture audio from the user's microphone.
-*   **Audio Encoding/Decoding:**
-    *   Sends microphone audio (converted to 16-bit PCM) to the backend, packaged using Protobuf (`frames.proto`).
-    *   Receives audio chunks from the backend (also Protobuf encoded).
-    *   Uses the Web Audio API (`AudioContext`, `AudioBufferSourceNode`) to decode and play the received audio in real-time.
+*   **Audio Handling:** Captures microphone input using `navigator.mediaDevices.getUserMedia` and plays back received audio using the Web Audio API. Audio data is exchanged with the backend via Protobuf-encoded messages over WebSocket.
 
-**4. Configuration & Serialization**
+## Prerequisites
 
-*   **`.env`:** Stores sensitive configuration like Google Cloud `PROJECT_ID`, the Gemini `MODEL` name, and the deployment `LOCATION`. **This file should not be committed to version control.**
-*   **`requirements.txt`:** Lists all necessary Python packages and their versions.
-*   **`frames.proto`:** Defines the Protocol Buffers message structure used for WebSocket communication between the frontend and backend, ensuring consistent data format.
+*   Python 3.9+
+*   Google Cloud Platform (GCP) account with a project created.
+*   Vertex AI API enabled in your GCP project.
+*   Google Cloud CLI (`gcloud`) installed and configured locally.
+*   Permissions to access Vertex AI endpoints (specifically `aiplatform.endpoints.streamGenerateContent`).
 
 ## Setup
 
-1.  **Clone the Repository:**
+1.  **Clone Repository:**
     ```bash
     git clone https://github.com/gauravz7/localbot-pipecat.git
     cd localbot-pipecat
     ```
-2.  **Create and Activate Virtual Environment:**
+2.  **Create & Activate Virtual Environment:**
     ```bash
     python3 -m venv venv
     source venv/bin/activate
-    # On Windows use `venv\Scripts\activate`
+    # On Windows: venv\Scripts\activate
     ```
 3.  **Install Dependencies:**
     ```bash
     pip install -r requirements.txt
     ```
-4.  **Google Cloud Authentication:**
-    *   Ensure you have the Google Cloud CLI (`gcloud`) installed and configured.
-    *   Authenticate using Application Default Credentials:
-        ```bash
-        gcloud auth application-default login
-        ```
-    *   Make sure the authenticated user/service account has the necessary permissions to access Vertex AI (specifically the `aiplatform.endpoints.streamGenerateContent` permission for the Gemini endpoint).
-5.  **Create `.env` File:**
-    Create a file named `.env` in the project root and add the following variables, replacing the placeholders with your actual values:
+4.  **Authenticate with Google Cloud:**
+    Log in using Application Default Credentials:
+    ```bash
+    gcloud auth application-default login
+    ```
+5.  **Configure Environment Variables:**
+    Copy the example environment file:
+    ```bash
+    cp .env.example .env
+    ```
+    Edit the `.env` file and replace the placeholder values with your specific GCP project details:
     ```dotenv
     PROJECT_ID="your-gcp-project-id"
-    LOCATION="us-central1" # Or your preferred GCP region supporting the model
-    MODEL="gemini-1.5-flash-001" # Or another compatible Gemini model
+    LOCATION="us-central1" # Or your GCP region
+    MODEL="gemini-1.5-flash-001" # Or compatible model
+    # Optional: GOOGLE_APPLICATION_CREDENTIALS="/path/to/key.json"
     ```
 
 ## Running the Application
 
-1.  **Start the Backend Server:**
-    Make sure your virtual environment is active.
+1.  **Start Backend Server (Terminal 1):**
+    Ensure your virtual environment is active.
     ```bash
     python bot.py
     ```
-    You should see log output indicating the server is running and waiting for connections on `localhost:8765`.
+    The server will start listening on `localhost:8765`.
 
-2.  **Open the Frontend:**
-    Open the `index.html` file in your web browser (e.g., by double-clicking it or using `File > Open` in your browser).
+2.  **Serve Frontend (Terminal 2):**
+    In a *separate terminal*, navigate to the project directory and run Python's built-in HTTP server:
+    ```bash
+    python -m http.server 8000
+    ```
+    *(Use `python -m SimpleHTTPServer 8000` for Python 2)*
 
-3.  **Interact:**
-    *   The page will initially show "Loading, wait..." while Protobuf definitions load.
-    *   Once it shows "We are ready!", click the "Start Audio" button.
-    *   Your browser will likely ask for permission to access your microphone. Allow it.
-    *   The WebSocket connection will be established, and you can start speaking to the Gemini bot.
-    *   The bot's audio responses will be played back through your speakers/headphones.
-    *   Click "Stop Audio" to disconnect the microphone and close the WebSocket connection.
+3.  **Access Frontend:**
+    Open your web browser and go to `http://localhost:8000`.
+
+4.  **Interact:**
+    *   Wait for "We are ready!".
+    *   Click "Start Audio". Allow microphone access if prompted.
+    *   Speak to interact with the Gemini bot. Audio responses will be played back.
+    *   Click "Stop Audio" to end the session.
 
 ## Key Files
 
-*   `bot.py`: Main Pipecat application orchestrating the pipeline.
-*   `gemini_multimodal_live_vertex/gemini.py`: Custom Pipecat service for interacting with the Vertex AI Gemini Live API.
-*   `index.html`: Simple web client for microphone input and audio output via WebSocket.
-*   `requirements.txt`: Lists Python dependencies.
-*   `.env`: Stores environment variables (GCP Project ID, Model, Location). **(Not version controlled)**
-*   `frames.proto`: Protobuf definition for WebSocket message frames.
-*   `.gitignore`: Specifies intentionally untracked files (like `venv/`, `.env`, `__pycache__/`).
+*   `bot.py`: The main Pipecat application defining the pipeline.
+*   `gemini_multimodal_live_vertex/gemini.py`: Custom service for Vertex AI Gemini Live interaction.
+*   `index.html`: Web client for audio I/O via WebSockets.
+*   `requirements.txt`: Python package dependencies.
+*   `frames.proto`: Protobuf definition for WebSocket message serialization.
+*   `.env`: Local environment configuration (ignored by Git).
+*   `.env.example`: Template for environment variables.
+*   `.gitignore`: Specifies files/directories ignored by Git.
+
+## Configuration
+
+Environment variables are managed using a `.env` file (loaded via `python-dotenv`). See `.env.example` for required variables (`PROJECT_ID`, `LOCATION`, `MODEL`). Your actual `.env` file should contain your specific configuration and is excluded from version control by `.gitignore`.
