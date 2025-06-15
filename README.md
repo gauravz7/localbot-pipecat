@@ -99,18 +99,6 @@ The application consists of a Python backend powered by Pipecat and a simple HTM
     python bot.py -t webrtc 
     ```
 
-2.  **Start Backend Server (with Twillio ):** Twilio
-It is also possible to run the example through a Twilio phone number. You will need to setup a few things:
-
-Install and run ngrok.
-    ```bash
-    ngrok http 7860
-    ```
-    Configure your Twilio phone number. One way is to setup a TwiML app and set the request URL to the ngrok URL from step (1). Then, set your phone number to use the new TwiML app. Then, run the example with:
-
-    ```bash
-    python bot.py -t twilio -x NGROK_HOST_NAME (no protocol)
-    ```
 
 ### Customizing Network Settings for `bot.py`
 
@@ -129,11 +117,6 @@ python bot.py --host YOUR_HOST --port YOUR_PORT
 For more examples of running other scripts, see the "Pipecat Foundational Examples" section below.
 
 
-### Advanced Usage (for Foundational Examples)
-Customizing Network Settings for foundational examples:
-```bash
-python <example-name>.py --host 0.0.0.0 --port 8080
-```
 
 ## Key Files
 
