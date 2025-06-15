@@ -73,12 +73,17 @@ The application consists of a Python backend powered by Pipecat and a simple HTM
     ```bash
     cp .env.example .env
     ```
-    Edit the `.env` file and replace the placeholder values with your specific GCP project details:
+    Edit the `.env` file. Here's an example of what it might look like with your specific GCP project details:
     ```dotenv
-    PROJECT_ID="your-gcp-project-id"
-    LOCATION="us-central1" # Or your GCP region
-    MODEL="gemini-1.5-flash-001" # Or compatible model
-    # Optional: GOOGLE_APPLICATION_CREDENTIALS="/path/to/key.json"
+GOOGLE_CLOUD_PROJECT=vital-octagon-19612
+GOOGLE_CLOUD_LOCATION=us-central1
+# Set this to enable VertexAI integration
+GOOGLE_GENAI_USE_VERTEXAI=True
+PROJECT_ID="vital-octagon-19612"
+#MODEL="gemini-2.0-flash-live-preview-04-09"
+MODEL="gemini-2.0-flash-live-preview-04-09"
+
+LOCATION="us-central1"
     ```
 
 ### Quick Start
