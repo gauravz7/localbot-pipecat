@@ -131,25 +131,6 @@ python 01-say-one-thing.py
 ```
 Open the web interface at http://localhost:7860 and click "Connect"
 
-### Running examples with other transports
-It is possible to run most of the examples with other transports such as Twilio or webrtc. 
-
-```bash
-python bot.py -t webrtc
-```
-
-### Twilio
-It is also possible to run the example through a Twilio phone number. You will need to setup a few things:
-
-1.  Install and run ngrok.
-    ```bash
-    ngrok http 7860
-    ```
-2.  Configure your Twilio phone number. One way is to setup a TwiML app and set the request URL to the ngrok URL from step (1). Then, set your phone number to use the new TwiML app.
-Then, run the example with:
-```bash
-python 07-interruptible.py -t twilio -x NGROK_HOST_NAME (no protocol)
-```
 
 ### Advanced Usage
 Customizing Network Settings
