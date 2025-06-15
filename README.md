@@ -86,25 +86,26 @@ The application consists of a Python backend powered by Pipecat and a simple HTM
 1.  **Start Backend Server (Terminal 1):**
     Ensure your virtual environment is active.
     ```bash
-    python bot.py
+    python bot.py -t webrtc 
     ```
-    The server will start listening on `localhost:8765`.
 
-2.  **Serve Frontend (Terminal 2):**
-    In a *separate terminal*, navigate to the project directory and run Python's built-in HTTP server:
-    ```bash
-    python -m http.server 8000
-    ```
-    *(Use `python -m SimpleHTTPServer 8000` for Python 2)*
+2. Twilio
+It is also possible to run the example through a Twilio phone number. You will need to setup a few things:
 
-3.  **Access Frontend:**
-    Open your web browser and go to `http://localhost:8000`.
+Install and run ngrok.
+ngrok http 7860
+Configure your Twilio phone number. One way is to setup a TwiML app and set the request URL to the ngrok URL from step (1). Then, set your phone number to use the new TwiML app. Then, run the example with:
+python 07-interruptible.py -t twilio -x NGROK_HOST_NAME (no protocol)
 
-4.  **Interact:**
-    *   Wait for "We are ready!".
-    *   Click "Start Audio". Allow microphone access if prompted.
-    *   Speak to interact with the Gemini bot. Audio responses will be played back.
-    *   Click "Stop Audio" to end the session.
+Customizing Network Settings
+
+python <example-name> --host 0.0.0.0 --port 8080
+Troubleshooting
+No audio/video: Check browser permissions for microphone and camera
+Connection errors: Verify API keys in .env file
+Missing dependencies: Run pip install -r requirements.txt
+Port conflicts: Use --port to change the port
+For more examples, visit our GitHub repository.
 
 ## Pipecat Foundational Examples
 This directory contains examples showing how to build voice and multimodal agents with Pipecat. Each example demonstrates specific features, progressing from basic to advanced concepts.
