@@ -28,7 +28,7 @@ The application consists of a Python backend powered by Pipecat and a simple HTM
 ### LLM Service (`gemini_multimodal_live_vertex/gemini.py`)
 
 *   **Custom Pipecat Service:** Extends `LLMService` to specifically handle the Gemini Live API.
-*   **Vertex AI Connection:** Establishes a secure WebSocket connection to the Vertex AI Gemini Multimodal Live endpoint (`wss://[location]-aiplatform.googleapis.com/ws/...`).
+*   **Vertex AI Connection:** Establishes a secure WebSocket connection to the Vertex AI Gemini Multimodal Live endpoint (`wss://[location]-aiplatform.googleapis.com/ws/...`), which includes specific handling for Vertex AI tool integration.
 *   **Authentication:** Authenticates using Google Cloud Application Default Credentials (ADC).
 *   **Real-time Streaming:** Manages the bidirectional flow of audio data and control messages (configuration, tool calls) with the Gemini API.
 
@@ -105,6 +105,73 @@ The application consists of a Python backend powered by Pipecat and a simple HTM
     *   Click "Start Audio". Allow microphone access if prompted.
     *   Speak to interact with the Gemini bot. Audio responses will be played back.
     *   Click "Stop Audio" to end the session.
+
+## Pipecat Foundational Examples
+This directory contains examples showing how to build voice and multimodal agents with Pipecat. Each example demonstrates specific features, progressing from basic to advanced concepts.
+
+### Learning Paths
+Depending on what you're trying to build, these learning paths will guide you through relevant examples:
+
+*   New to Pipecat: Start with examples 01, 02, 07
+*   Building conversational bots: 07, 10, 38
+*   Common add-on capabilities: 17, 24, 28, 34
+*   Adding visual capabilities: 03, 12, 26
+*   Advanced agent capabilities: 14, 20, 37
+
+### Quick Start
+Set up a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+Create a .env file with your API keys.
+
+Run any example:
+```bash
+python 01-say-one-thing.py
+```
+Open the web interface at http://localhost:7860 and click "Connect"
+
+### Running examples with other transports
+It is possible to run most of the examples with other transports such as Twilio or webrtc. 
+
+```bash
+python 07-interruptible.py -t daily
+```
+
+### Twilio
+It is also possible to run the example through a Twilio phone number. You will need to setup a few things:
+
+1.  Install and run ngrok.
+    ```bash
+    ngrok http 7860
+    ```
+2.  Configure your Twilio phone number. One way is to setup a TwiML app and set the request URL to the ngrok URL from step (1). Then, set your phone number to use the new TwiML app.
+Then, run the example with:
+```bash
+python 07-interruptible.py -t twilio -x NGROK_HOST_NAME (no protocol)
+```
+
+### Examples by Feature
+(This part seems to be missing from the provided text, if there's a list of examples by feature, it would go here)
+
+### Advanced Usage
+Customizing Network Settings
+```bash
+python <example-name> --host 0.0.0.0 --port 8080
+```
+
+### Troubleshooting
+*   No audio/video: Check browser permissions for microphone and camera
+*   Connection errors: Verify API keys in .env file
+*   Missing dependencies: Run pip install -r requirements.txt
+*   Port conflicts: Use --port to change the port
+
+For more examples, visit our GitHub repository.
 
 ## Key Files
 

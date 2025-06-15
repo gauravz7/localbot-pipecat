@@ -30,6 +30,7 @@ from pipecat.frames.frames import (
     LLMFullResponseEndFrame,
     LLMFullResponseStartFrame,
     LLMMessagesAppendFrame,
+    LLMMessagesFrame,
     LLMSetToolsFrame,
     LLMTextFrame,
     LLMUpdateSettingsFrame,
@@ -43,6 +44,7 @@ from pipecat.frames.frames import (
     UserImageRawFrame,
     UserStartedSpeakingFrame,
     UserStoppedSpeakingFrame,
+    EndTaskFrame #JUST ADDED
 )
 from pipecat.metrics.metrics import LLMTokenUsage
 from pipecat.processors.aggregators.openai_llm_context import (
@@ -50,8 +52,8 @@ from pipecat.processors.aggregators.openai_llm_context import (
     OpenAILLMContextFrame,
 )
 from pipecat.processors.frame_processor import FrameDirection
-from pipecat.services.ai_services import LLMService
-from pipecat.services.openai import (
+from pipecat.services.llm_service import LLMService
+from pipecat.services.openai.llm import (
     OpenAIAssistantContextAggregator,
     OpenAIUserContextAggregator,
 )
@@ -59,10 +61,16 @@ from pipecat.services.openai import (
 from pipecat.utils.time import time_now_iso8601
 
 import google.auth
-from google.auth.transport.requests import Request
+# from google.auth.transport.requests import Request
+from google.genai import types
+from oauth2client.client import GoogleCredentials
+# from google import genai
+# from google.genai import types
 
 from . import events
 from .audio_transcriber import AudioTranscriber
+# from tool_configs import rebuttals_tool
+
 
 class GeminiMultimodalLiveContext(OpenAILLMContext):
     @staticmethod
@@ -120,6 +128,8 @@ class GeminiMultimodalLiveUserContextAggregator(OpenAIUserContextAggregator):
         # kind of a hack just to pass the LLMMessagesAppendFrame through, but it's fine for now
         if isinstance(frame, LLMMessagesAppendFrame):
             await self.push_frame(frame, direction)
+        if isinstance(frame, LLMMessagesFrame):
+            await self.push_frame(frame, direction)
 
 
 class GeminiMultimodalLiveAssistantContextAggregator(OpenAIAssistantContextAggregator):
@@ -170,8 +180,12 @@ class GeminiMultimodalLiveLLMService(LLMService):
         #base_url="generativelanguage.googleapis.com",
         base_url="us-central1-aiplatform.googleapis.com",
         #model="models/gemini-2.0-flash-exp",
-        model="gemini-2.0-flash-exp",
-        voice_id: str = "Charon",
+        model : str,
+        stream_sid : str="",
+        websocket_start_time= 0,
+        voice_id: str = "Leda",
+        project_id: str,
+        location: str="us-central1",
         start_audio_paused: bool = False,
         start_video_paused: bool = False,
         system_instruction: Optional[str] = None,
@@ -180,6 +194,7 @@ class GeminiMultimodalLiveLLMService(LLMService):
         transcribe_model_audio: bool = False,
         params: InputParams = InputParams(),
         inference_on_context_initialization: bool = True,
+        call_variable: Optional[str] = None, # ADDED EXTRA PARAMETER TO MAKE DYNAMIC FAQs
         **kwargs,
     ):
         super().__init__(base_url=base_url, **kwargs)
@@ -187,11 +202,16 @@ class GeminiMultimodalLiveLLMService(LLMService):
         self.api_key = api_key
         self.base_url = base_url
         self.set_model_name(model)
+        self.stream_sid = stream_sid
         self._voice_id = voice_id
-
+        self.project_id = project_id
+        self.location = location
+        self.model= model
         self._system_instruction = system_instruction
         self._tools = tools
         self._inference_on_context_initialization = inference_on_context_initialization
+        self._call_variable = call_variable # ADDED EXTRA PARAMETER TO MAKE DYNAMIC FAQs
+
         self._needs_turn_complete_message = False
 
         self._audio_input_paused = start_audio_paused
@@ -208,7 +228,7 @@ class GeminiMultimodalLiveLLMService(LLMService):
         self._api_session_ready = False
         self._run_llm_when_api_session_ready = False
 
-        self._transcriber = AudioTranscriber(api_key)
+        self._transcriber = AudioTranscriber(project_id=self.project_id,location=self.location, model=self.model)
         self._transcribe_user_audio = transcribe_user_audio
         self._transcribe_model_audio = transcribe_model_audio
         self._user_is_speaking = False
@@ -216,7 +236,11 @@ class GeminiMultimodalLiveLLMService(LLMService):
         self._user_audio_buffer = bytearray()
         self._bot_audio_buffer = bytearray()
         self._bot_text_buffer = ""
-
+        
+        self.websocket_start_time = websocket_start_time
+        self._request_start_time = 0.0
+        self._setup_start_time = 0.0
+        self.setup_time = 0.0
         self._sample_rate = 24000
 
         self._settings = {
@@ -264,6 +288,9 @@ class GeminiMultimodalLiveLLMService(LLMService):
 
     async def start(self, frame: StartFrame):
         await super().start(frame)
+        logger.info("Starting Gemini service and initiating connection...")
+        self.setup_time = 0
+        self._setup_start_time = time.time()
         await self._connect()
 
     async def stop(self, frame: EndFrame):
@@ -294,6 +321,7 @@ class GeminiMultimodalLiveLLMService(LLMService):
             evt = events.ClientContentMessage.model_validate(
                 {"clientContent": {"turnComplete": True}}
             )
+            self._request_start_time = time.time() # <--- Start timer
             await self.send_client_event(evt)
         if self._transcribe_user_audio and self._context:
             await self._transcribe_audio_queue.put(audio)
@@ -390,6 +418,8 @@ class GeminiMultimodalLiveLLMService(LLMService):
             await self.push_frame(frame, direction)
         elif isinstance(frame, LLMMessagesAppendFrame):
             await self._create_single_response(frame.messages)
+        elif isinstance(frame, LLMMessagesFrame):
+            await self._create_single_response(frame.messages)
         elif isinstance(frame, LLMUpdateSettingsFrame):
             await self._update_settings(frame.settings)
         elif isinstance(frame, LLMSetToolsFrame):
@@ -419,22 +449,30 @@ class GeminiMultimodalLiveLLMService(LLMService):
 
             # creds.valid is False, and creds.token is None
             # Need to refresh credentials to populate those
-            auth_req = Request()
-            creds.refresh(auth_req)
-            bearer_token = creds.token
+            # auth_req = Request()
+            # creds.refresh(auth_req)
+            # bearer_token = creds.token
+
+          
+
+            credentials = GoogleCredentials.get_application_default()
+            bearer_token = credentials.get_access_token().access_token
+        
+
             #uri = f"wss://{self.base_url}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key={self.api_key}"
             uri = f"wss://{self.base_url}/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent"
             logger.info(f"Connecting to {uri}")
-            self._websocket = await websockets.connect(uri=uri, extra_headers={"Authorization": f"Bearer {bearer_token}"})
+            self._websocket = await websockets.connect(uri=uri, additional_headers={"Authorization": f"Bearer {bearer_token}"})
             self._receive_task = self.create_task(self._receive_task_handler())
             self._transcribe_audio_task = self.create_task(self._transcribe_audio_handler())
             self._transcribe_model_audio_task = self.create_task(
                 self._transcribe_model_audio_handler()
             )
+            
             config = events.Config.model_validate(
                 {
                     "setup": {
-                        "model": f"projects/vital-octagon-19612/locations/us-central1/publishers/google/models/gemini-2.0-flash-live-preview-04-09",
+                        "model": f"projects/{self.project_id}/locations/{self.location}/publishers/google/models/{self.model}",
                         "generation_config": {
                             "frequency_penalty": self._settings["frequency_penalty"],
                             "max_output_tokens": self._settings["max_tokens"],  # Not supported yet
@@ -449,24 +487,34 @@ class GeminiMultimodalLiveLLMService(LLMService):
                                     "prebuilt_voice_config": {"voice_name": self._voice_id}
                                 },
                             },
+                       
                             # "safety_settings":safety_settings
                         },
+                        "realtime_input_config": {
+                        "automatic_activity_detection": {
+                            "disabled": False, # default
+                            "start_of_speech_sensitivity": "START_SENSITIVITY_LOW",
+                            "end_of_speech_sensitivity": "END_SENSITIVITY_LOW",
+                            "prefix_padding_ms": 300,
+                            "silence_duration_ms": 300,
+                        }
+                    }
                     },
                 }
             )
-
 
             system_instruction = self._system_instruction or ""
             if self._context and hasattr(self._context, "extract_system_instructions"):
                 system_instruction += "\n" + self._context.extract_system_instructions()
             if system_instruction:
-                logger.debug(f"Setting system instruction: {system_instruction}")
+                # logger.debug(f"Setting system instruction: {system_instruction}")
                 config.setup.system_instruction = events.SystemInstruction(
                     parts=[events.ContentPart(text=system_instruction)]
                 )
             if self._tools:
-                logger.debug(f"Gemini is configuring to use tools{self._tools}")
+                # logger.debug(f"Gemini is configuring to use tools{self._tools}")
                 config.setup.tools = self.get_llm_adapter().from_standard_tools(self._tools)
+            logger.debug(f"[CONFIG]: {config}")
             await self.send_client_event(config)
 
         except Exception as e:
@@ -478,6 +526,9 @@ class GeminiMultimodalLiveLLMService(LLMService):
         try:
             self._disconnecting = True
             self._api_session_ready = False
+            self._setup_start_time = None
+            self._request_start_time = None
+            self.setup_time = None
             await self.stop_all_metrics()
             if self._websocket:
                 await self._websocket.close()
@@ -546,10 +597,6 @@ class GeminiMultimodalLiveLLMService(LLMService):
             audio = await self._transcribe_model_audio_queue.get()
             await self._handle_transcribe_model_audio(audio, self._context)
 
-    #
-    #
-    #
-
     async def _send_user_audio(self, frame):
         if self._audio_input_paused:
             return
@@ -587,7 +634,11 @@ class GeminiMultimodalLiveLLMService(LLMService):
         messages = self._context.get_messages_for_initializing_history()
         if not messages:
             return
-
+        if self._inference_on_context_initialization:
+            logger.debug("Starting Live TTFB Timer")
+            self._request_start_time = time.time() # <--- Start timer
+        else:
+            logger.debug("Creating initial response (no inference expected yet)")
         logger.debug(f"Creating initial response: {messages}")
 
         evt = events.ClientContentMessage.model_validate(
@@ -639,12 +690,14 @@ class GeminiMultimodalLiveLLMService(LLMService):
                 }
             }
         )
+        logger.info(evt)
+        self._request_start_time = time.time() # <--- Start timer
         await self.send_client_event(evt)
 
     async def _tool_result(self, tool_result_message):
         # For now we're shoving the name into the tool_call_id field, so this
         # will work until we revisit that.
-        id = tool_result_message.get("tool_call_id")
+        call_id = tool_result_message.get("tool_call_id")
         name = tool_result_message.get("tool_call_name")
         result = json.loads(tool_result_message.get("content") or "")
         response_message = json.dumps(
@@ -652,7 +705,7 @@ class GeminiMultimodalLiveLLMService(LLMService):
                 "toolResponse": {
                     "functionResponses": [
                         {
-                            "id": id,
+                            "id": call_id,
                             "name": name,
                             "response": {
                                 "result": result,
@@ -667,6 +720,13 @@ class GeminiMultimodalLiveLLMService(LLMService):
 
     async def _handle_evt_setup_complete(self, evt):
         # If this is our first context frame, run the LLM
+        if self._setup_start_time is not None:
+            setup_end_time = time.time()
+            setup_duration = setup_end_time - self._setup_start_time
+            self.setup_time = setup_duration
+            logger.info(f"{self.stream_sid}: Gemini Multimodal Live Setup Time: {setup_duration:.4f} seconds")
+            self._setup_start_time = None
+
         self._api_session_ready = True
         # Now that we've configured the session, we can run the LLM if we need to.
         if self._run_llm_when_api_session_ready:
@@ -674,6 +734,17 @@ class GeminiMultimodalLiveLLMService(LLMService):
             await self._create_initial_response()
 
     async def _handle_evt_model_turn(self, evt):
+        if self._request_start_time is not None:
+            first_byte_time = time.time()
+            ttfr = first_byte_time - self._request_start_time
+            ttfb = self.setup_time + ttfr
+            logger.info(f"{self.stream_sid}: Gemini Multimodal Live First Response: {ttfr:.4f} seconds")
+            logger.info(f"{self.stream_sid}: Gemini Multimodal Live TTFB: {ttfb:.4f} seconds")
+            total_ttfb = ttfb + self.websocket_start_time
+            logger.info(f"{self.stream_sid}: Total TTFB: {total_ttfb:.4f} seconds")
+            self._request_start_time = None
+            self.setup_time = 0.0
+
         part = evt.serverContent.modelTurn.parts[0]
         if not part:
             return
@@ -687,11 +758,13 @@ class GeminiMultimodalLiveLLMService(LLMService):
             await self.push_frame(LLMTextFrame(text=text))
 
         inline_data = part.inlineData
+        # print(f"inline_data {inline_data.mimeType}")
         if not inline_data:
             return
-        #if inline_data.mimeType != f"audio/pcm;rate={self._sample_rate}":
-        #    logger.warning(f"Unrecognized server_content format {inline_data.mimeType}")
-        #    return
+        # if inline_data.mimeType != f"audio/pcm;rate={self._sample_rate}":
+        #     print(f" if condition block {inline_data.mimeType}")
+        #     logger.warning(f"Unrecognized server_content format {inline_data.mimeType}")
+        #     return
 
         audio = base64.b64decode(inline_data.data)
         if not audio:
@@ -716,12 +789,32 @@ class GeminiMultimodalLiveLLMService(LLMService):
         if not self._context:
             logger.error("Function calls are not supported without a context object.")
         for call in function_calls:
-            await self.call_function(
-                context=self._context,
-                tool_call_id=call.id,
-                function_name=call.name,
-                arguments=call.args,
-            )
+            if call.name == "end_call":
+                await self.call_function(
+                    context=self._context,
+                    tool_call_id=call.id,
+                    function_name=call.name,
+                    arguments=call.args,
+                )
+                return # Do not execute end_call tool, end the function execution here
+        await self._exc_custom_tool_call(function_calls)
+    
+    async def _exc_custom_tool_call(self, tool_calls):
+        """Executes custom tool call and sends back the function response to websocket"""
+        logger.debug(f"\n[LLM] Tool call received: {tool_calls}")
+        
+        function_responses = rebuttals_tool.process_rebuttal_tool_call(tool_calls, self._call_variable)
+
+        response_message = json.dumps(
+            {
+                "toolResponse": {
+                    "functionResponses": function_responses,
+                }
+            }
+        )
+        logger.info(response_message)
+        await self._websocket.send(response_message)
+        logger.debug("[Local Logic] Sent tool responses to Gemini.")
 
     async def _handle_evt_turn_complete(self, evt):
         self._bot_is_speaking = False
