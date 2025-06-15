@@ -69,22 +69,27 @@ The application consists of a Python backend powered by Pipecat and a simple HTM
     gcloud auth application-default login
     ```
 5.  **Configure Environment Variables:**
-    Copy the example environment file:
-    ```bash
-    cp .env.example .env
-    ```
-    Edit the `.env` file. Here's an example of what it might look like with your specific GCP project details:
-    ```dotenv
-GOOGLE_CLOUD_PROJECT=vital-octagon-19612
-GOOGLE_CLOUD_LOCATION=us-central1
+        Copy the example environment file:
+        ```bash
+        cp .env.example .env
+        
+        Edit the `.env` file. Here's an example of what it might look like with your specific GCP project details:
+        
+        GOOGLE_CLOUD_PROJECT=vital-octagon-19612
+        GOOGLE_CLOUD_LOCATION=us-central1
+        ```
+    
 # Set this to enable VertexAI integration
-GOOGLE_GENAI_USE_VERTEXAI=True
-PROJECT_ID="vital-octagon-19612"
-#MODEL="gemini-2.0-flash-live-preview-04-09"
-MODEL="gemini-2.0-flash-live-preview-04-09"
 
-LOCATION="us-central1"
+    ```bash
+        GOOGLE_GENAI_USE_VERTEXAI=True
+        PROJECT_ID="vital-octagon-19612"
+        #MODEL="gemini-2.0-flash-live-preview-04-09"
+        MODEL="gemini-2.0-flash-live-preview-04-09"
+
+        LOCATION="us-central1"
     ```
+
 
 ## Running the Application
 
@@ -123,72 +128,12 @@ python bot.py --host YOUR_HOST --port YOUR_PORT
 
 For more examples of running other scripts, see the "Pipecat Foundational Examples" section below.
 
-## Pipecat Foundational Examples
-This directory contains examples showing how to build voice and multimodal agents with Pipecat. Each example demonstrates specific features, progressing from basic to advanced concepts.
-
-### Learning Paths
-Depending on what you're trying to build, these learning paths will guide you through relevant examples:
-
-*   New to Pipecat: Start with examples 01, 02, 07
-*   Building conversational bots: 07, 10, 38
-*   Common add-on capabilities: 17, 24, 28, 34
-*   Adding visual capabilities: 03, 12, 26
-*   Advanced agent capabilities: 14, 20, 37
-
-### Quick Start (for Foundational Examples)
-Set up a virtual environment (if not already done for the main project):
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-Install dependencies (if not already done for the main project):
-```bash
-pip install -r requirements.txt
-```
-Create a .env file with your API keys (if not already done for the main project).
-
-Run any example from the examples directory (e.g., if you `cd` into an examples directory or adjust path):
-```bash
-python 01-say-one-thing.py 
-```
-Open the web interface at http://localhost:7860 and click "Connect" (Note: port may vary per example)
-
-### Running Foundational Examples with Other Transports
-It is possible to run most of the foundational examples with other transports such as Twilio or Daily.
-```bash
-python 07-interruptible.py -t daily
-```
-
-### Twilio (for Foundational Examples)
-It is also possible to run a foundational example like `07-interruptible.py` through a Twilio phone number. You will need to setup a few things:
-
-1.  Install and run ngrok.
-    ```bash
-    ngrok http 7860 
-    ```
-    (Note: The port `7860` is common for Gradio interfaces used by some examples, adjust if needed.)
-2.  Configure your Twilio phone number. One way is to setup a TwiML app and set the request URL to the ngrok URL from step (1). Then, set your phone number to use the new TwiML app.
-Then, run the example with:
-```bash
-python 07-interruptible.py -t twilio -x NGROK_HOST_NAME (no protocol)
-```
-
-### Examples by Feature (for Foundational Examples)
-(This part seems to be missing from the provided text, if there's a list of examples by feature, it would go here)
 
 ### Advanced Usage (for Foundational Examples)
 Customizing Network Settings for foundational examples:
 ```bash
 python <example-name>.py --host 0.0.0.0 --port 8080
 ```
-
-### Troubleshooting (for Foundational Examples)
-*   No audio/video: Check browser permissions for microphone and camera.
-*   Connection errors: Verify API keys in .env file.
-*   Missing dependencies: Run `pip install -r requirements.txt`.
-*   Port conflicts: Use `--port` to change the port.
-
-For more examples, visit our GitHub repository.
 
 ## Key Files
 
