@@ -12,6 +12,7 @@ This project implements a real-time, voice-controlled chatbot using the [Pipecat
 *   Voice Activity Detection (VAD).
 *   Basic function calling support (e.g., ending the call).
 *   Configurable via environment variables.
+*   Support for capturing and processing video frames from participant's camera and screen via `bot_camera.py`.
 
 ## Architecture
 
@@ -37,6 +38,14 @@ The application consists of a Python backend powered by Pipecat and a simple HTM
 *   **Interface:** Provides a minimal web interface for user interaction (start/stop audio).
 *   **WebSocket Client:** Connects to the backend WebSocket server (`ws://localhost:8765`).
 *   **Audio Handling:** Captures microphone input using `navigator.mediaDevices.getUserMedia` and plays back received audio using the Web Audio API. Audio data is exchanged with the backend via Protobuf-encoded messages over WebSocket.
+
+### Video-Enabled Bot (`bot_camera.py`)
+
+*   **Purpose:** Extends the functionality of `bot.py` by enabling video input. This script captures video frames from the participant's camera and/or screen.
+*   **Video Capture:** Uses `maybe_capture_participant_camera` and `maybe_capture_participant_screen` from Pipecat to stream video frames at a configurable framerate (default 1fps in the script).
+*   **Transport Configuration:** The `DailyParams` and `TransportParams` are configured with `video_in_enabled=True`.
+*   **LLM Modality:** While video frames are captured and sent, the `GeminiMultimodalLiveLLMService` in this script is currently configured with `modalities=GeminiMultimodalModalities.AUDIO`. This means the LLM primarily processes audio, but the framework is set up for potential multimodal (audio + video) interactions if the LLM service configuration is updated.
+*   **Usage:** Similar to `bot.py`, it uses the Pipecat pipeline for real-time communication.
 
 ## Prerequisites
 
@@ -93,26 +102,34 @@ The application consists of a Python backend powered by Pipecat and a simple HTM
 
 ## Running the Application
 
-1.  **Start Backend Server (Terminal 1):**
-    Ensure your virtual environment is active.
+Ensure your virtual environment is active before running any bot script.
+
+1.  **Start Audio-Only Bot Server (`bot.py`) (Terminal 1):**
     ```bash
-    python bot.py -t webrtc 
+    python bot.py -t webrtc
     ```
 
+2.  **Start Video-Enabled Bot Server (`bot_camera.py`) (Terminal 1):**
+    This script enables camera and screen capture in addition to audio.
+    ```bash
+    python bot_camera.py -t webrtc
+    ```
 
-### Customizing Network Settings for `bot.py`
+*(Note: You can typically only run one bot server at a time on the default port unless configured otherwise.)*
 
-To run `bot.py` (the main application) on a specific host or port:
+### Customizing Network Settings for Bot Scripts
+
+To run `bot.py` or `bot_camera.py` on a specific host or port:
 ```bash
-python bot.py --host YOUR_HOST --port YOUR_PORT
+python <script_name.py> --host YOUR_HOST --port YOUR_PORT -t <transport_type>
 ```
-(Note: The `-t webrtc` or `-t twilio` arguments might also be needed depending on your transport.)
+(e.g., `python bot_camera.py --host 0.0.0.0 --port 8766 -t webrtc`)
 
-### Troubleshooting `bot.py`
+### Troubleshooting Bot Scripts
 *   No audio/video: Check browser permissions for microphone and camera if using WebRTC.
-*   Connection errors: Verify API keys in `.env` file.
+*   Connection errors: Verify API keys and GCP configuration in `.env` file.
 *   Missing dependencies: Ensure `pip install -r requirements.txt` was successful.
-*   Port conflicts: Use `--port` to change the port for `bot.py`.
+*   Port conflicts: Use `--port` to change the port for the bot script.
 
 For more examples of running other scripts, see the "Pipecat Foundational Examples" section below.
 
@@ -121,6 +138,7 @@ For more examples of running other scripts, see the "Pipecat Foundational Exampl
 ## Key Files
 
 *   `bot.py`: The main Pipecat application defining the pipeline.
+*   `bot_camera.py`: Pipecat application similar to `bot.py` but with added video capture capabilities (camera and screen).
 *   `gemini_multimodal_live_vertex/gemini.py`: Custom service for Vertex AI Gemini Live interaction.
 *   `index.html`: Web client for audio I/O via WebSockets.
 *   `requirements.txt`: Python package dependencies.
